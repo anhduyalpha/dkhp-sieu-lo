@@ -491,15 +491,15 @@ class UITGuiApp(ctk.CTk):
         self.right_pane = ctk.CTkFrame(self, corner_radius=10, fg_color=("#1f2937", "#111827"))
         self.right_pane.grid(row=0, column=1, padx=(6, 12), pady=12, sticky="nsew")
         self.right_pane.grid_columnconfigure(0, weight=1)
-        self.right_pane.grid_rowconfigure(3, weight=1)
+        self.right_pane.grid_rowconfigure(2, weight=1)
 
         self.header_frame = ctk.CTkFrame(self.right_pane, corner_radius=8, fg_color=("#374151", "#1f2937"))
-        self.header_frame.grid(row=0, column=0, padx=10, pady=(10, 6), sticky="ew")
+        self.header_frame.grid(row=0, column=0, padx=10, pady=(10, 4), sticky="ew")
         self.header_frame.grid_columnconfigure(0, weight=1)
 
         title_label = ctk.CTkLabel(
             self.header_frame, 
-            text="⚡ BẢNG ĐIỀU KHIỂN TURBO", 
+            text="⚡ ĐIỀU KHIỂN TURBO", 
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color="#38bdf8"
         )
@@ -517,22 +517,34 @@ class UITGuiApp(ctk.CTk):
         )
         self.status_badge.grid(row=0, column=1, padx=10, pady=8, sticky="e")
 
-        self.input_frame = ctk.CTkFrame(self.right_pane, corner_radius=8)
-        self.input_frame.grid(row=1, column=0, padx=10, pady=6, sticky="ew")
-        self.input_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        self.buttons_frame = ctk.CTkFrame(self.right_pane, corner_radius=8)
+        self.buttons_frame.grid(row=1, column=0, padx=10, pady=4, sticky="ew")
+        self.buttons_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-        input_title = ctk.CTkLabel(
-            self.input_frame, 
-            text="📋 Danh sách mã môn học (Dán hoặc Import file):", 
-            font=ctk.CTkFont(size=12, weight="bold")
+        self.btn_fire_now = ctk.CTkButton(
+            self.buttons_frame,
+            text="🚀 ĐĂNG KÝ TỨC THÌ (SPACE / ENTER)",
+            command=self.trigger_fire_now,
+            font=ctk.CTkFont(size=16, weight="bold"),
+            fg_color="#16a34a",
+            hover_color="#15803d",
+            height=48
         )
-        input_title.grid(row=0, column=0, columnspan=4, padx=10, pady=(6, 2), sticky="w")
+        self.btn_fire_now.grid(row=0, column=0, columnspan=4, padx=10, pady=(8, 4), sticky="ew")
 
-        self.txt_subjects = ctk.CTkTextbox(self.input_frame, height=120, font=ctk.CTkFont(family="Consolas", size=12))
-        self.txt_subjects.grid(row=1, column=0, columnspan=4, padx=10, pady=4, sticky="ew")
+        self.btn_f5_loop = ctk.CTkButton(
+            self.buttons_frame,
+            text="🔄 F5 & BẮN LIÊN TỤC (Loop 50ms)",
+            command=self.trigger_f5_loop,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#d97706",
+            hover_color="#b45309",
+            height=36
+        )
+        self.btn_f5_loop.grid(row=1, column=0, columnspan=4, padx=10, pady=4, sticky="ew")
 
         btn_import_excel = ctk.CTkButton(
-            self.input_frame, 
+            self.buttons_frame, 
             text="📁 Import Excel", 
             command=self.import_file,
             fg_color="#0284c7",
@@ -540,10 +552,10 @@ class UITGuiApp(ctk.CTk):
             font=ctk.CTkFont(size=12, weight="bold"),
             height=30
         )
-        btn_import_excel.grid(row=2, column=0, padx=(10, 3), pady=6, sticky="ew")
+        btn_import_excel.grid(row=2, column=0, padx=(10, 2), pady=4, sticky="ew")
 
         btn_save = ctk.CTkButton(
-            self.input_frame, 
+            self.buttons_frame, 
             text="💾 Lưu môn", 
             command=self.save_subjects_to_file,
             fg_color="#059669",
@@ -551,10 +563,10 @@ class UITGuiApp(ctk.CTk):
             font=ctk.CTkFont(size=12, weight="bold"),
             height=30
         )
-        btn_save.grid(row=2, column=1, padx=3, pady=6, sticky="ew")
+        btn_save.grid(row=2, column=1, padx=2, pady=4, sticky="ew")
 
         btn_sample = ctk.CTkButton(
-            self.input_frame, 
+            self.buttons_frame, 
             text="🔄 Nạp mẫu", 
             command=self.load_sample_subjects,
             fg_color="#4b5563",
@@ -562,53 +574,27 @@ class UITGuiApp(ctk.CTk):
             font=ctk.CTkFont(size=12),
             height=30
         )
-        btn_sample.grid(row=2, column=2, padx=3, pady=6, sticky="ew")
+        btn_sample.grid(row=2, column=2, padx=2, pady=4, sticky="ew")
 
         btn_clear = ctk.CTkButton(
-            self.input_frame, 
-            text="🗑️ Xóa", 
+            self.buttons_frame, 
+            text="🗑️ Xóa trắng", 
             command=lambda: self.txt_subjects.delete("1.0", tk.END),
             fg_color="#dc2626",
             hover_color="#b91c1c",
             font=ctk.CTkFont(size=12),
             height=30
         )
-        btn_clear.grid(row=2, column=3, padx=(3, 10), pady=6, sticky="ew")
+        btn_clear.grid(row=2, column=3, padx=(2, 10), pady=4, sticky="ew")
 
-        self.control_frame = ctk.CTkFrame(self.right_pane, corner_radius=8)
-        self.control_frame.grid(row=2, column=0, padx=10, pady=6, sticky="ew")
-        self.control_frame.grid_columnconfigure((0, 1), weight=1)
-
-        self.btn_fire_now = ctk.CTkButton(
-            self.control_frame,
-            text="🚀 ĐĂNG KÝ TỨC THÌ (SPACE / ENTER)",
-            command=self.trigger_fire_now,
-            font=ctk.CTkFont(size=16, weight="bold"),
-            fg_color="#16a34a",
-            hover_color="#15803d",
-            height=50
-        )
-        self.btn_fire_now.grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 6), sticky="ew")
-
-        self.btn_f5_loop = ctk.CTkButton(
-            self.control_frame,
-            text="🔄 F5 & BẮN LIÊN TỤC (Loop 50ms)",
-            command=self.trigger_f5_loop,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color="#d97706",
-            hover_color="#b45309",
-            height=38
-        )
-        self.btn_f5_loop.grid(row=1, column=0, columnspan=2, padx=10, pady=4, sticky="ew")
-
-        timer_subframe = ctk.CTkFrame(self.control_frame, fg_color="transparent")
-        timer_subframe.grid(row=2, column=0, columnspan=2, padx=10, pady=(4, 10), sticky="ew")
+        timer_subframe = ctk.CTkFrame(self.buttons_frame, fg_color="transparent")
+        timer_subframe.grid(row=3, column=0, columnspan=4, padx=10, pady=(4, 8), sticky="ew")
         timer_subframe.grid_columnconfigure(1, weight=1)
 
         lbl_timer = ctk.CTkLabel(timer_subframe, text="⏱️ Hẹn giờ:", font=ctk.CTkFont(size=12, weight="bold"))
         lbl_timer.grid(row=0, column=0, padx=(0, 4), sticky="w")
 
-        self.entry_timer = ctk.CTkEntry(timer_subframe, placeholder_text="09:00:00.000", font=ctk.CTkFont(family="Consolas", size=12), height=30)
+        self.entry_timer = ctk.CTkEntry(timer_subframe, placeholder_text="09:00:00.000", font=ctk.CTkFont(family="Consolas", size=12), height=28)
         self.entry_timer.grid(row=0, column=1, padx=4, sticky="ew")
 
         self.btn_timer = ctk.CTkButton(
@@ -616,7 +602,7 @@ class UITGuiApp(ctk.CTk):
             text="Đặt giờ",
             command=self.toggle_timer,
             width=70,
-            height=30,
+            height=28,
             fg_color="#8b5cf6",
             hover_color="#7c3aed",
             font=ctk.CTkFont(size=12)
@@ -631,23 +617,35 @@ class UITGuiApp(ctk.CTk):
         )
         self.lbl_clock.grid(row=0, column=3, padx=(6, 0), sticky="e")
 
-        self.log_frame = ctk.CTkFrame(self.right_pane, corner_radius=8)
-        self.log_frame.grid(row=3, column=0, padx=10, pady=(6, 10), sticky="nsew")
-        self.log_frame.grid_columnconfigure(0, weight=1)
-        self.log_frame.grid_rowconfigure(1, weight=1)
+        self.tabview_bottom = ctk.CTkTabview(self.right_pane, corner_radius=8)
+        self.tabview_bottom.grid(row=2, column=0, padx=10, pady=(4, 10), sticky="nsew")
 
-        log_header = ctk.CTkFrame(self.log_frame, fg_color="transparent")
-        log_header.grid(row=0, column=0, padx=8, pady=(4, 2), sticky="ew")
-        log_header.grid_columnconfigure(0, weight=1)
+        self.tab_subjects = self.tabview_bottom.add("📝 HỘP DÁN MÃ MÔN")
+        self.tab_log = self.tabview_bottom.add("📜 LIVE LOG")
 
-        lbl_log = ctk.CTkLabel(log_header, text="📜 Live Terminal Log:", font=ctk.CTkFont(size=12, weight="bold"))
-        lbl_log.grid(row=0, column=0, sticky="w")
+        self.tab_subjects.grid_columnconfigure(0, weight=1)
+        self.tab_subjects.grid_rowconfigure(0, weight=1)
+
+        self.txt_subjects = ctk.CTkTextbox(
+            self.tab_subjects, 
+            font=ctk.CTkFont(family="Consolas", size=13),
+            fg_color="#0f172a",
+            text_color="#f8fafc"
+        )
+        self.txt_subjects.grid(row=0, column=0, padx=4, pady=4, sticky="nsew")
+
+        self.tab_log.grid_columnconfigure(0, weight=1)
+        self.tab_log.grid_rowconfigure(1, weight=1)
+
+        log_top_bar = ctk.CTkFrame(self.tab_log, fg_color="transparent")
+        log_top_bar.grid(row=0, column=0, padx=4, pady=2, sticky="ew")
+        log_top_bar.grid_columnconfigure(0, weight=1)
 
         btn_clear_log = ctk.CTkButton(
-            log_header, 
+            log_top_bar, 
             text="Xóa log", 
-            width=50, 
-            height=20, 
+            width=60, 
+            height=22, 
             command=self.clear_log,
             fg_color="#374151",
             hover_color="#1f2937",
@@ -656,12 +654,12 @@ class UITGuiApp(ctk.CTk):
         btn_clear_log.grid(row=0, column=1, sticky="e")
 
         self.txt_log = ctk.CTkTextbox(
-            self.log_frame, 
+            self.tab_log, 
             font=ctk.CTkFont(family="Consolas", size=11),
             fg_color="#0f172a",
             text_color="#f8fafc"
         )
-        self.txt_log.grid(row=1, column=0, padx=8, pady=(2, 8), sticky="nsew")
+        self.txt_log.grid(row=1, column=0, padx=4, pady=(2, 4), sticky="nsew")
 
     def bind_shortcuts(self):
         self.bind("<Return>", lambda e: self.trigger_fire_now() if e.widget != self.txt_subjects else None)
