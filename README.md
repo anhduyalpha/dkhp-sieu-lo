@@ -56,20 +56,26 @@ pip install -r requirements.txt
 Trước khi khởi động tool, bạn hãy điền trước thông tin vào 2 file cấu hình:
 
 ### 1. Nhập Tài khoản & Mật khẩu (`tai-khoan.txt`)
+
 Mở file **`tai-khoan.txt`** và nhập thông tin của bạn:
+
 ```text
 USER=2152xxxx
-PASS=MatKhauCuaBan123
+PASS=MatKhauCuaBan123 ( coi chừng bị tôi hack acc =))))))))) )
 ```
+
 *(Hoặc bạn có thể nhập trực tiếp tại tab **👤 TÀI KHOẢN** trên giao diện sau khi mở tool).*
 
 ### 2. Nhập Danh sách Mã môn học (`mon-hoc.txt`)
+
 Mở file **`mon-hoc.txt`** và dán danh sách mã lớp học phần cần đăng ký (mỗi môn 1 dòng):
+
 ```text
 IT001.N11
 IT002.N12
 IT003.N13.1
 ```
+
 *(Hoặc dán trực tiếp vào ô văn bản trên GUI / Bấm **📁 Import Excel / TXT**).*
 
 ---
@@ -80,6 +86,7 @@ IT003.N13.1
 
 - **Cách nhanh**: Click đúp vào file **`run.bat`** để chạy tool.
 - Hoặc chạy lệnh qua PowerShell:
+
   ```powershell
   .\.venv\Scripts\python.exe gui.py
   ```
@@ -97,6 +104,7 @@ IT003.N13.1
 ### Cách 2: Sử dụng dòng lệnh Terminal (CLI)
 
 Chạy lệnh:
+
 ```powershell
 .\.venv\Scripts\python.exe inject-hoc-phan.py
 ```
