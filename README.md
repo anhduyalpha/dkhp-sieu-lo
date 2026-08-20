@@ -1,13 +1,6 @@
-# UIT ĐKHP
+# UIT ĐKHP - TURBO ENGINE ⚡
 
-Công cụ hỗ trợ đăng ký học phần UIT siêu lỏ qua Chrome DevTools Protocol (CDP) WebSocket.
-
-- **Bảng điều khiển tương tác nhanh**:
-  - `[ENTER]`: Bắn lệnh tick và Đăng ký tức thì.
-  - `f` + `[ENTER]`: F5 tải lại trang và tự động bắn liên tục (mỗi 50ms).
-  - `auto` + `[ENTER]`: Bắn lặp liên tục mỗi 50ms cho tới khi đăng ký thành công.
-  - `r` + `[ENTER]`: Nạp lại danh sách mã môn từ file `mon-hoc.txt`.
-  - `q` + `[ENTER]`: Thoát chương trình.
+Công cụ hỗ trợ đăng ký học phần UIT siêu tốc độ qua Chrome DevTools Protocol (CDP) WebSocket với giao diện đồ họa **GUI chia đôi màn hình (Side-by-Side)**.
 
 ---
 
@@ -17,64 +10,69 @@ Công cụ hỗ trợ đăng ký học phần UIT siêu lỏ qua Chrome DevTools
 
 ---
 
-## 🛠️ Yêu cầu & Cài đặt
+## 🌟 Tính năng nổi bật
 
-### 1. Yêu cầu
+- **Giao diện đồ họa GUI (Dark Mode)**:
+  - 🌐 **Nút Mở Chrome & Snap 1 bên**: Tự mở Chrome và căn chỉnh màn hình (Trái: Chrome 60%, Phải: Bảng điều khiển 40%).
+  - 📋 **Hộp nhập liệu đa năng**: Dán danh sách mã môn tự do (dòng mới, dấu phẩy, khoảng trắng).
+  - 📁 **Import Excel / TXT / CSV**: Tự động quét và lọc mã lớp học phần từ file Excel (`.xlsx`, `.xls`), CSV, Text.
+  - 🚀 **Bắn lệnh siêu tốc (Hotkey: `SPACE` / `ENTER`)**: Độ trễ WebSocket < 2ms.
+  - 🔄 **F5 & Bắn lặp liên tục (Loop 50ms)**: Vừa reload trang vừa bắt bảng học phần.
+  - ⏱️ **Hẹn giờ kích hoạt chính xác mili-giây**: Đặt giờ (ví dụ `09:00:00.000`), đến đúng giờ tool tự động bắn lệnh.
+  - 📜 **Live Terminal Log**: Theo dõi thời gian thực từng mili-giây.
 
-- Python 3.8+
-- Google Chrome
+---
 
-### 2. Cài đặt môi trường ảo & Thư viện
+## 🛠️ Cài đặt
 
 Mở PowerShell tại thư mục dự án và chạy:
 
 ```powershell
-# Tạo môi trường ảo
+# 1. Tạo môi trường ảo
 python -m venv .venv
 
-# Kích hoạt môi trường ảo
+# 2. Kích hoạt môi trường ảo
 .\.venv\Scripts\Activate.ps1
 
-# Cài đặt thư viện
+# 3. Cài đặt các thư viện cần thiết
 pip install -r requirements.txt
 ```
 
 ---
 
-## Hướng dũng sử dệnh
+## 🚀 Hướng dẫn sử dụng
 
-### Bước 1: Tự lực cánh sinh nhập tay =)))))
+### Cách 1: Sử dụng Giao diện Đồ họa GUI (Khuyên dùng)
 
-Mở file `mon-hoc.txt` và nhập danh sách mã lớp học phần cần đăng ký (mỗi mã 1 dòng), ví dụ:
-
-```text
-IT012.R11
-IT012.R11.1
-SS007.R15
-SS003.R14
-IT005.R18
-IT005.R18.2
-IT007.R111.1
-IT007.R111
-IT004.R117
-IT004.R117.1
+Chạy lệnh:
+```powershell
+.\.venv\Scripts\python.exe gui.py
 ```
 
-### Bước 2: Chạy tool ( biết python và env là được )
+1. **Nhập mã môn**: Dán trực tiếp vào ô văn bản hoặc bấm **📁 Import Excel / File** để chọn file Excel/TXT. Bấm **💾 Lưu danh sách**.
+2. **Mở Chrome**: Bấm **🌐 MỞ CHROME & SNAP 1 BÊN**. Chrome sẽ mở bên trái và tự điền tài khoản, mật khẩu.
+3. **Đăng nhập**: Nếu có Captcha, nhập Captcha trên màn hình Chrome và bấm Đăng nhập.
+4. **Bắn lệnh**:
+   - **Cách 1**: Đến giờ mở cổng, nhấn phím **`SPACE`** hoặc **`ENTER`** hoặc bấm nút màu xanh **🚀 ĐĂNG KÝ TỨC THÌ**.
+   - **Cách 2**: Bấm **🔄 F5 & BẮN LIÊN TỤC (50ms)** nếu cổng đang mở dần.
+   - **Cách 3**: Nhập giờ vào ô hẹn giờ (ví dụ `08:59:59.900`) và bấm **Đặt giờ**.
 
+---
+
+### Cách 2: Sử dụng dòng lệnh Terminal (CLI)
+
+Chạy lệnh:
 ```powershell
 .\.venv\Scripts\python.exe inject-hoc-phan.py
 ```
 
-### Bước 3: Đăng nhập & Sẵn sàng
-
-1. Tool sẽ tự mở Chrome và truy cập vào trang `https://dkhp.uit.edu.vn/app/reg`.
-2. Tài khoản & Mật khẩu đã được điền sẵn. Nếu xuất hiện **Captcha**, bạn chỉ cần nhập Captcha trên màn hình Chrome và bấm Đăng nhập. ( còn không mua thì money talk có tool bypass capcha mà tỉ lệ ra capcha khá thấp nếu auto liên tục mới ra ).
-3. Khi đã vào trang ĐKHP, tool sẽ ở trạng thái chờ lệnh sẵn sàng.
-4. **Đến đúng giây mở cổng ĐKHP**: Nhấn phím **`ENTER]`** trên terminal để hệ thống tự động tick chọn tất cả các môn và bấm Đăng ký.
+- Nhấn **`[ENTER]`**: Bắn lệnh tức thì.
+- Gõ **`f`** + **`[ENTER]`**: F5 tải lại trang & bắn liên tục.
+- Gõ **`auto`** + **`[ENTER]`**: Bắn lặp mỗi 50ms.
+- Gõ **`r`** + **`[ENTER]`**: Nạp lại file `mon-hoc.txt`.
 
 ---
 
-## 📜 Sử dụng trực tiếp trên trình duyệt (Console / Bookmarklet)
+### Cách 3: Sử dụng trực tiếp trên Console trình duyệt (Bookmarklet)
 
-Nếu không dùng Python, bạn có thể copy nội dung trong file `scripts.js` và dán trực tiếp vào **DevTools Console (F12)** trên tab ĐKHP để chạy tức thì.
+Copy toàn bộ mã trong file [`scripts.js`](./scripts.js) và dán trực tiếp vào **DevTools Console (F12)** trên tab ĐKHP để chạy tức thì 0ms.
