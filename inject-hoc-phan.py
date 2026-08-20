@@ -14,6 +14,7 @@ init(autoreset=True)
 TARGET_URL = "https://dkhp.uit.edu.vn/app/reg"
 DEFAULT_FILES = ["mon_hoc.txt", "mon-hoc.txt"]
 CHROME_DEBUG_PORT = 9222
+ACCOUNT_FILES = ["tai-khoan.txt", "tai_khoan.txt", "account.txt"]
 CONFIG_FILE = "config.json"
 DEFAULT_AUTH_USER = ""
 DEFAULT_AUTH_PASS = ""
@@ -28,7 +29,53 @@ class UITTurboBot:
         self.auth_pass = DEFAULT_AUTH_PASS
         self.load_config()
 
+    def parse_account_text(self, text):
+        user = ""
+        passw = ""
+        lines = [l.strip() for l in text.splitlines() if l.strip() and not l.strip().startswith("#") and not l.strip().startswith("//")]
+        for line in lines:
+            if "=" in line:
+                k, v = line.split("=", 1)
+                k = k.strip().upper()
+                v = v.strip()
+                if k in ("USER", "USERNAME", "MSSV", "TAI_KHOAN", "TAIKHOAN", "ID", "ACCOUNT"):
+                    user = v
+                elif k in ("PASS", "PASSWORD", "MAT_KHAU", "MATKHAU", "PASSW", "MK"):
+                    passw = v
+            elif "|" in line:
+                parts = line.split("|", 1)
+                user = parts[0].strip()
+                passw = parts[1].strip()
+            elif ":" in line and not line.startswith("http"):
+                parts = line.split(":", 1)
+                user = parts[0].strip()
+                passw = parts[1].strip()
+
+        if not user and len(lines) >= 1:
+            user = lines[0]
+        if not passw and len(lines) >= 2:
+            passw = lines[1]
+        return user, passw
+
     def load_config(self):
+        self.auth_user = DEFAULT_AUTH_USER
+        self.auth_pass = DEFAULT_AUTH_PASS
+
+        # 1. Đọc từ tai-khoan.txt trước
+        for fn in ACCOUNT_FILES:
+            if os.path.exists(fn):
+                try:
+                    with open(fn, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    u, p = self.parse_account_text(content)
+                    if u or p:
+                        self.auth_user = u
+                        self.auth_pass = p
+                        return
+                except Exception:
+                    pass
+
+        # 2. Nếu chưa có, đọc từ config.json
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:

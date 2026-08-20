@@ -27,6 +27,7 @@ TARGET_URL = "https://dkhp.uit.edu.vn/app/reg"
 DEFAULT_FILES = ["mon_hoc.txt", "mon-hoc.txt"]
 CHROME_DEBUG_PORT = 9222
 USER_DATA_DIR = r"C:\chrome_debug"
+ACCOUNT_FILES = ["tai-khoan.txt", "tai_khoan.txt", "account.txt"]
 CONFIG_FILE = "config.json"
 DEFAULT_AUTH_USER = ""
 DEFAULT_AUTH_PASS = ""
@@ -53,9 +54,53 @@ class UITTurboEngine:
         self.auth_pass = DEFAULT_AUTH_PASS
         self.load_config()
 
+    def parse_account_text(self, text):
+        user = ""
+        passw = ""
+        lines = [l.strip() for l in text.splitlines() if l.strip() and not l.strip().startswith("#") and not l.strip().startswith("//")]
+        for line in lines:
+            if "=" in line:
+                k, v = line.split("=", 1)
+                k = k.strip().upper()
+                v = v.strip()
+                if k in ("USER", "USERNAME", "MSSV", "TAI_KHOAN", "TAIKHOAN", "ID", "ACCOUNT"):
+                    user = v
+                elif k in ("PASS", "PASSWORD", "MAT_KHAU", "MATKHAU", "PASSW", "MK"):
+                    passw = v
+            elif "|" in line:
+                parts = line.split("|", 1)
+                user = parts[0].strip()
+                passw = parts[1].strip()
+            elif ":" in line and not line.startswith("http"):
+                parts = line.split(":", 1)
+                user = parts[0].strip()
+                passw = parts[1].strip()
+
+        if not user and len(lines) >= 1:
+            user = lines[0]
+        if not passw and len(lines) >= 2:
+            passw = lines[1]
+        return user, passw
+
     def load_config(self):
         self.auth_user = DEFAULT_AUTH_USER
         self.auth_pass = DEFAULT_AUTH_PASS
+
+        # 1. Đọc từ tai-khoan.txt trước
+        for fn in ACCOUNT_FILES:
+            if os.path.exists(fn):
+                try:
+                    with open(fn, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    u, p = self.parse_account_text(content)
+                    if u or p:
+                        self.auth_user = u
+                        self.auth_pass = p
+                        return
+                except Exception:
+                    pass
+
+        # 2. Nếu chưa có, đọc từ config.json
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -68,12 +113,18 @@ class UITTurboEngine:
     def save_config(self, user, password):
         self.auth_user = user
         self.auth_pass = password
+        success = True
+        try:
+            with open("tai-khoan.txt", "w", encoding="utf-8") as f:
+                f.write(f"# Thông tin tài khoản ĐKHP UIT\nUSER={user}\nPASS={password}\n")
+        except Exception:
+            success = False
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump({"auth_user": user, "auth_pass": password}, f, ensure_ascii=False, indent=2)
-            return True
         except Exception:
-            return False
+            pass
+        return success
 
     def log(self, tag, msg, level="info"):
         now = datetime.now().strftime("%H:%M:%S.%f")[:-3]

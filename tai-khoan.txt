@@ -1,0 +1,7 @@
+# Nhập thông tin tài khoản và mật khẩu ĐKHP của bạn vào đây:
+# Dòng 1: MSSV / Tài khoản
+# Dòng 2: Mật khẩu
+# (Hoặc dùng định dạng USER=... và PASS=...)
+
+USER=
+PASS=
