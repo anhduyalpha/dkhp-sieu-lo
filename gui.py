@@ -114,10 +114,12 @@ class UITTurboEngine:
             return False
 
         if not self.is_chrome_running():
-            self.log("LAUNCH", f"Khởi động Chrome: {chrome_path}", "warning")
+            self.log("LAUNCH", "Khởi động Chrome & nhúng trực tiếp...", "warning")
             cmd = [
                 chrome_path,
                 f"--app={TARGET_URL}",
+                "--window-position=-10000,-10000",
+                f"--window-size={max(width, 800)},{max(height, 700)}",
                 f"--remote-debugging-port={CHROME_DEBUG_PORT}",
                 "--remote-allow-origins=*",
                 f"--user-data-dir={USER_DATA_DIR}",
@@ -127,13 +129,20 @@ class UITTurboEngine:
             self.chrome_process = subprocess.Popen(cmd)
 
         connected = False
-        for _ in range(25):
-            time.sleep(0.3)
-            if self.is_chrome_running():
+        embedded = False
+        for _ in range(40):
+            if not embedded:
+                embedded = self.embed_chrome_window(container_hwnd, width, height, max_attempts=1, delay=0.0)
+            if not connected and self.is_chrome_running():
                 connected = True
+            if embedded and connected:
                 break
+            time.sleep(0.06)
 
-        if not connected:
+        if not embedded:
+            self.embed_chrome_window(container_hwnd, width, height, max_attempts=12, delay=0.08)
+
+        if not self.is_chrome_running():
             self.log("ERROR", "Không thể kết nối tới Chrome Debug port.", "error")
             return False
 
@@ -141,7 +150,6 @@ class UITTurboEngine:
         if self.status_callback:
             self.status_callback("Chrome: Đã kết nối", True)
 
-        self.embed_chrome_window(container_hwnd, width, height)
         self.connect_ws()
         self.auto_fill_login()
         return True
@@ -242,22 +250,23 @@ class UITTurboEngine:
         candidates.sort(key=lambda x: x[0], reverse=True)
         return candidates[0][1]
 
-    def embed_chrome_window(self, container_hwnd, width=800, height=700):
+    def embed_chrome_window(self, container_hwnd, width=800, height=700, max_attempts=20, delay=0.08):
         if not ctypes or not container_hwnd:
-            return
+            return False
 
         user32 = ctypes.windll.user32
         found_hwnd = None
 
-        for _ in range(25):
+        for _ in range(max_attempts):
             found_hwnd = self.find_target_chrome_hwnd(container_hwnd)
             if found_hwnd:
                 break
-            time.sleep(0.3)
+            if delay > 0:
+                time.sleep(delay)
 
         if found_hwnd:
             self.chrome_hwnd = found_hwnd
-            # Khôi phục nếu đang bị thu nhỏ (minimize)
+            # Khôi phục và nhúng vào container
             user32.ShowWindow(found_hwnd, 9)  # SW_RESTORE
             user32.SetParent(found_hwnd, container_hwnd)
             
@@ -276,8 +285,9 @@ class UITTurboEngine:
             user32.MoveWindow(found_hwnd, 0, 0, width, height, True)
             user32.UpdateWindow(found_hwnd)
             self.log("EMBED", "Đã nhúng Chrome trực tiếp vào giao diện.", "success")
+            return True
         else:
-            self.log("WARN", "Chưa tìm thấy cửa sổ Chrome để nhúng trực tiếp.", "warning")
+            return False
 
     def resize_embedded_chrome(self, width, height):
         if ctypes and self.chrome_hwnd and width > 0 and height > 0:
@@ -620,7 +630,7 @@ class UITGuiApp(ctk.CTk):
         self.bind_shortcuts()
         self.start_clock_thread()
 
-        self.after(800, self.auto_start_embedded_chrome)
+        self.after(200, self.auto_start_embedded_chrome)
 
     def maximize_window(self):
         try:
