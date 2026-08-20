@@ -1,8 +1,4 @@
-# UIT ĐKHP - TẤT CẢ TRONG MỘT (EMBEDDED CHROME & TURBO CONTROL) ⚡
-
-Công cụ hỗ trợ đăng ký học phần UIT siêu tốc độ thông qua Chrome DevTools Protocol (CDP) WebSocket với giao diện đồ họa **All-in-One: Nhúng trực tiếp Chrome & Điều khiển Turbo**.
-
----
+# UIT ĐKHP
 
 ## 📸 Ảnh minh họa giao diện
 
