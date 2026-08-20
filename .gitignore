@@ -1,0 +1,8 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+C:/chrome_debug/
+chrome_debug/

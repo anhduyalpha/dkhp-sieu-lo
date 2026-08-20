@@ -1,0 +1,13 @@
+# Nhập danh sách mã lớp / học phần cần đăng ký (mỗi môn 1 dòng)
+# Dòng có dấu # ở đầu sẽ được bỏ qua
+
+IT012.R11
+IT012.R11.1
+SS007.R15
+SS003.R14
+IT005.R18
+IT005.R18.2
+IT007.R111.1
+IT007.R111
+IT004.R117
+IT004.R117.1
