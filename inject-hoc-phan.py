@@ -317,42 +317,48 @@ class UITTurboBot:
           const rows = document.querySelectorAll("table tbody tr");
           if (rows.length === 0) return {{ status: "error", message: "Chưa thấy bảng học phần! Hãy đảm bảo bạn đã đăng nhập và vào đúng trang ĐKHP." }};
 
-          const setCheckbox = (cb) => {{
-            if (!cb) return false;
-            if (!cb.checked) {{
-              try {{
-                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')?.set;
-                if (setter) setter.call(cb, true);
-                else cb.checked = true;
-              }} catch(e) {{
-                cb.checked = true;
-              }}
-              cb.dispatchEvent(new Event('input', {{ bubbles: true }}));
-              cb.dispatchEvent(new Event('change', {{ bubbles: true }}));
-              cb.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true }}));
-              return true;
-            }}
-            return false;
-          }};
-
           for (let i = 0; i < rows.length; i++) {{
             const row = rows[i];
             const cells = row.querySelectorAll("td");
             if (cells.length < 2) continue;
-            const code = (cells[1].textContent || "").trim().toUpperCase();
 
-            if (targets.has(code)) {{
-              found.push(code);
-              const cb = row.querySelector("input[type='checkbox']") || cells[0].querySelector("input");
+            let matchCode = null;
+            for (let c = 1; c < Math.min(cells.length, 5); c++) {{
+              const fullText = (cells[c].innerText || cells[c].textContent || "").trim().toUpperCase();
+              const firstWord = fullText.split(/[\\s\\n\\r\\t\\-]+/)[0];
+              if (targets.has(fullText)) {{ matchCode = fullText; break; }}
+              if (targets.has(firstWord)) {{ matchCode = firstWord; break; }}
+            }}
+
+            if (matchCode) {{
+              found.push(matchCode);
+              const cb = row.querySelector("input[type='checkbox']") || (cells[0] ? cells[0].querySelector("input") : null);
+              const chakraLabel = row.querySelector("label.chakra-checkbox, span.chakra-checkbox__control") || (cells[0] ? cells[0].querySelector("label, span") : null);
+
               if (cb) {{
-                if (setCheckbox(cb)) {{
-                  newlyTicked.push(code);
+                if (!cb.checked) {{
+                  cb.click();
+                  if (!cb.checked && chakraLabel) {{
+                    chakraLabel.click();
+                  }}
+                  if (!cb.checked && cells[0]) {{
+                    cells[0].click();
+                  }}
+                  if (!cb.checked) {{
+                    cb.checked = true;
+                    cb.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    cb.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                  }}
+                  newlyTicked.push(matchCode);
                 }} else {{
-                  alreadyTicked.push(code);
+                  alreadyTicked.push(matchCode);
                 }}
-              }} else {{
+              }} else if (chakraLabel) {{
+                chakraLabel.click();
+                newlyTicked.push(matchCode);
+              }} else if (cells[0]) {{
                 cells[0].click();
-                newlyTicked.push(code);
+                newlyTicked.push(matchCode);
               }}
             }}
           }}
@@ -360,13 +366,25 @@ class UITTurboBot:
           const notFound = Array.from(targets).filter(c => !found.includes(c));
 
           const findBtn = () => {{
-            const direct = document.querySelector("div.detailBar button, div.detailBar button.chakra-button, button.chakra-button.css-kyhdse, button[type='submit']");
-            if (direct) return direct;
-            const allButtons = document.querySelectorAll("button, input[type='submit'], div[role='button']");
-            for (let i = 0; i < allButtons.length; i++) {{
-              const txt = (allButtons[i].textContent || allButtons[i].value || "").trim().toLowerCase();
+            const direct = [
+              "div.detailBar button.chakra-button.css-kyhdse",
+              "div.detailBar button.chakra-button",
+              "div.detailBar button",
+              "div[class*='detailBar'] button",
+              "button.chakra-button.css-kyhdse",
+              "button[type='submit']",
+              "form button[type='submit']"
+            ];
+            for (const s of direct) {{
+              const el = document.querySelector(s);
+              if (el) return el;
+            }}
+
+            const allButtons = Array.from(document.querySelectorAll("button, input[type='submit'], div[role='button'], a[role='button']"));
+            for (const b of allButtons) {{
+              const txt = (b.innerText || b.textContent || b.value || "").trim().toLowerCase();
               if (txt.includes("đăng ký") || txt.includes("dang ky") || txt.includes("lưu") || txt.includes("xác nhận")) {{
-                return allButtons[i];
+                return b;
               }}
             }}
             return null;
@@ -376,6 +394,10 @@ class UITTurboBot:
             if (!btn) return false;
             btn.removeAttribute('disabled');
             btn.disabled = false;
+            try {{
+              btn.scrollIntoView({{ behavior: "instant", block: "center" }});
+            }} catch(e) {{}}
+
             ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {{
               btn.dispatchEvent(new MouseEvent(evt, {{ bubbles: true, cancelable: true, view: window }}));
             }});
@@ -396,8 +418,7 @@ class UITTurboBot:
             clicked = doClick(btn);
           }}
 
-          // Micro-burst background trigger
-          [5, 15, 30, 60, 100].forEach(delay => {{
+          [10, 30, 60, 100, 200].forEach(delay => {{
             setTimeout(() => {{
               const b = findBtn();
               if (b) doClick(b);
@@ -432,6 +453,52 @@ class UITTurboBot:
         not_found = result.get("notFound", [])
         clicked = result.get("clickedRegister", False)
         js_time = result.get("elapsedMs", "0")
+
+        # Thử lại nếu React render nút chậm sau khi tick
+        if not clicked and (newly or already):
+            for _ in range(6):
+                time.sleep(0.04)
+                res_btn = self.eval_js("""
+                (() => {
+                  const direct = [
+                    "div.detailBar button.chakra-button.css-kyhdse",
+                    "div.detailBar button.chakra-button",
+                    "div.detailBar button",
+                    "div[class*='detailBar'] button",
+                    "button.chakra-button.css-kyhdse",
+                    "button[type='submit']"
+                  ];
+                  for (const s of direct) {
+                    const el = document.querySelector(s);
+                    if (el) {
+                      el.removeAttribute('disabled');
+                      el.disabled = false;
+                      ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
+                        el.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
+                      });
+                      if (typeof el.click === 'function') el.click();
+                      return true;
+                    }
+                  }
+                  const allButtons = Array.from(document.querySelectorAll("button, input[type='submit'], div[role='button']"));
+                  for (const b of allButtons) {
+                    const txt = (b.innerText || b.textContent || b.value || "").trim().toLowerCase();
+                    if (txt.includes("đăng ký") || txt.includes("dang ky") || txt.includes("lưu") || txt.includes("xác nhận")) {
+                      b.removeAttribute('disabled');
+                      b.disabled = false;
+                      ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
+                        b.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
+                      });
+                      if (typeof b.click === 'function') b.click();
+                      return true;
+                    }
+                  }
+                  return false;
+                })();
+                """)
+                if res_btn:
+                    clicked = True
+                    break
 
         self.log("FIRE", f"Đã thực thi trong {js_time}ms (Tổng: {total_time_ms}ms)", Fore.GREEN)
 

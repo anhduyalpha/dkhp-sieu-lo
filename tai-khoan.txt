@@ -3,5 +3,5 @@
 # Dòng 2: Mật khẩu
 # (Hoặc dùng định dạng USER=... và PASS=...)
 
-USER=
-PASS=
+USER=25520412
+PASS=QawJcz975zuBs$8
