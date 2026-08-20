@@ -14,10 +14,9 @@ init(autoreset=True)
 TARGET_URL = "https://dkhp.uit.edu.vn/app/reg"
 DEFAULT_FILES = ["mon_hoc.txt", "mon-hoc.txt"]
 CHROME_DEBUG_PORT = 9222
-USER_DATA_DIR = r"C:\chrome_debug"
-
-AUTH_USER = "25520412"
-AUTH_PASS = "QawJcz975zuBs$8"
+CONFIG_FILE = "config.json"
+DEFAULT_AUTH_USER = "25520412"
+DEFAULT_AUTH_PASS = "QawJcz975zuBs$8"
 
 class UITTurboBot:
     def __init__(self):
@@ -25,6 +24,19 @@ class UITTurboBot:
         self.ws_url = None
         self.target_classes = []
         self.msg_id = 0
+        self.auth_user = DEFAULT_AUTH_USER
+        self.auth_pass = DEFAULT_AUTH_PASS
+        self.load_config()
+
+    def load_config(self):
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    self.auth_user = cfg.get("auth_user", DEFAULT_AUTH_USER)
+                    self.auth_pass = cfg.get("auth_pass", DEFAULT_AUTH_PASS)
+            except Exception:
+                pass
 
     def log(self, tag, msg, color=Fore.WHITE):
         now = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -193,8 +205,8 @@ class UITTurboBot:
     def auto_fill_login(self):
         fill_js = f"""
         (() => {{
-          const user = "{AUTH_USER}";
-          const pass = "{AUTH_PASS}";
+          const user = {json.dumps(self.auth_user)};
+          const pass = {json.dumps(self.auth_pass)};
 
           if (document.querySelector("table tbody tr")) return {{ status: "logged_in" }};
 
@@ -207,7 +219,13 @@ class UITTurboBot:
           if (userInput && passInput) {{
             const setVal = (el, val) => {{
               el.focus();
-              el.value = val;
+              try {{
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                if (setter) setter.call(el, val);
+                else el.value = val;
+              }} catch(e) {{
+                el.value = val;
+              }}
               el.dispatchEvent(new Event('input', {{ bubbles: true }}));
               el.dispatchEvent(new Event('change', {{ bubbles: true }}));
             }};
@@ -234,7 +252,7 @@ class UITTurboBot:
                 self.log("AUTH", "Đã ở trong trang ĐKHP (đã đăng nhập).", Fore.GREEN)
             elif status == "filled":
                 has_captcha = res.get("hasCaptcha", False)
-                self.log("AUTH", f"Đã điền sẵn tài khoản '{AUTH_USER}' và mật khẩu.", Fore.GREEN)
+                self.log("AUTH", f"Đã điền sẵn tài khoản '{self.auth_user}' và mật khẩu.", Fore.GREEN)
                 if has_captcha:
                     self.log("CAPTCHA", "👉 Phát hiện có Captcha! Bạn hãy nhập mã Captcha trên Chrome và đăng nhập.", Fore.YELLOW)
                 else:
@@ -252,19 +270,35 @@ class UITTurboBot:
           const rows = document.querySelectorAll("table tbody tr");
           if (rows.length === 0) return {{ status: "error", message: "Chưa thấy bảng học phần! Hãy đảm bảo bạn đã đăng nhập và vào đúng trang ĐKHP." }};
 
+          const setCheckbox = (cb) => {{
+            if (!cb) return false;
+            if (!cb.checked) {{
+              try {{
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')?.set;
+                if (setter) setter.call(cb, true);
+                else cb.checked = true;
+              }} catch(e) {{
+                cb.checked = true;
+              }}
+              cb.dispatchEvent(new Event('input', {{ bubbles: true }}));
+              cb.dispatchEvent(new Event('change', {{ bubbles: true }}));
+              cb.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true }}));
+              return true;
+            }}
+            return false;
+          }};
+
           for (let i = 0; i < rows.length; i++) {{
             const row = rows[i];
             const cells = row.querySelectorAll("td");
             if (cells.length < 2) continue;
-            const code = (cells[1].innerText || cells[1].textContent || "").trim().toUpperCase();
+            const code = (cells[1].textContent || "").trim().toUpperCase();
 
             if (targets.has(code)) {{
               found.push(code);
               const cb = row.querySelector("input[type='checkbox']") || cells[0].querySelector("input");
               if (cb) {{
-                if (!cb.checked) {{
-                  cb.click();
-                  cb.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                if (setCheckbox(cb)) {{
                   newlyTicked.push(code);
                 }} else {{
                   alreadyTicked.push(code);
@@ -278,18 +312,50 @@ class UITTurboBot:
 
           const notFound = Array.from(targets).filter(c => !found.includes(c));
 
-          const btn = 
-            document.querySelector("div.detailBar button.chakra-button.css-kyhdse") ||
-            document.querySelector("div.detailBar button") ||
-            document.querySelector("html body.chakra-ui-light div.css-7t4500 div.css-7t4500 div.css-b95f0i div.css-15u5c5a div.css-1n8vwuv div.css-1luud69 div.chakra-stack.css-1ozbvuw div.css-16b2evc form div.p-2 div.detailBar.fixed.w-full.left-0.bottom-0.bg-gray-100.z-10.border-t.border-solid.border-gray-300.text-center.py-2 div.w-full.justify-center.items-center div.chakra-stack.css-1rafi8n button.chakra-button.css-kyhdse") ||
-            Array.from(document.querySelectorAll("button")).find(b => (b.innerText || "").includes("Đăng ký"));
+          const findBtn = () => {{
+            const direct = document.querySelector("div.detailBar button, div.detailBar button.chakra-button, button.chakra-button.css-kyhdse, button[type='submit']");
+            if (direct) return direct;
+            const allButtons = document.querySelectorAll("button, input[type='submit'], div[role='button']");
+            for (let i = 0; i < allButtons.length; i++) {{
+              const txt = (allButtons[i].textContent || allButtons[i].value || "").trim().toLowerCase();
+              if (txt.includes("đăng ký") || txt.includes("dang ky") || txt.includes("lưu") || txt.includes("xác nhận")) {{
+                return allButtons[i];
+              }}
+            }}
+            return null;
+          }};
 
+          const doClick = (btn) => {{
+            if (!btn) return false;
+            btn.removeAttribute('disabled');
+            btn.disabled = false;
+            ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {{
+              btn.dispatchEvent(new MouseEvent(evt, {{ bubbles: true, cancelable: true, view: window }}));
+            }});
+            if (typeof btn.click === 'function') btn.click();
+            const form = btn.closest('form') || document.querySelector('form');
+            if (form) {{
+              try {{
+                if (typeof form.requestSubmit === 'function') form.requestSubmit(btn);
+                else form.dispatchEvent(new Event('submit', {{ bubbles: true }}));
+              }} catch(e) {{}}
+            }}
+            return true;
+          }};
+
+          let btn = findBtn();
           let clicked = false;
           if (btn) {{
-            btn.scrollIntoView({{ behavior: "instant", block: "center" }});
-            btn.click();
-            clicked = true;
+            clicked = doClick(btn);
           }}
+
+          // Micro-burst background trigger
+          [5, 15, 30, 60, 100].forEach(delay => {{
+            setTimeout(() => {{
+              const b = findBtn();
+              if (b) doClick(b);
+            }}, delay);
+          }});
 
           const elapsedMs = (performance.now() - t0).toFixed(2);
 
@@ -298,7 +364,7 @@ class UITTurboBot:
             newlyTicked: newlyTicked,
             alreadyTicked: alreadyTicked,
             notFound: notFound,
-            clickedRegister: clicked,
+            clickedRegister: clicked || !!btn,
             elapsedMs: elapsedMs
           }};
         }})();

@@ -27,8 +27,9 @@ TARGET_URL = "https://dkhp.uit.edu.vn/app/reg"
 DEFAULT_FILES = ["mon_hoc.txt", "mon-hoc.txt"]
 CHROME_DEBUG_PORT = 9222
 USER_DATA_DIR = r"C:\chrome_debug"
-AUTH_USER = "25520412"
-AUTH_PASS = "QawJcz975zuBs$8"
+CONFIG_FILE = "config.json"
+DEFAULT_AUTH_USER = "25520412"
+DEFAULT_AUTH_PASS = "QawJcz975zuBs$8"
 
 GWL_STYLE = -16
 WS_CHILD = 0x40000000
@@ -48,6 +49,31 @@ class UITTurboEngine:
         self.is_looping = False
         self.chrome_process = None
         self.chrome_hwnd = None
+        self.auth_user = DEFAULT_AUTH_USER
+        self.auth_pass = DEFAULT_AUTH_PASS
+        self.load_config()
+
+    def load_config(self):
+        self.auth_user = DEFAULT_AUTH_USER
+        self.auth_pass = DEFAULT_AUTH_PASS
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    self.auth_user = cfg.get("auth_user", DEFAULT_AUTH_USER)
+                    self.auth_pass = cfg.get("auth_pass", DEFAULT_AUTH_PASS)
+            except Exception:
+                pass
+
+    def save_config(self, user, password):
+        self.auth_user = user
+        self.auth_pass = password
+        try:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump({"auth_user": user, "auth_pass": password}, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception:
+            return False
 
     def log(self, tag, msg, level="info"):
         now = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -120,6 +146,102 @@ class UITTurboEngine:
         self.auto_fill_login()
         return True
 
+    def _get_process_image_path(self, pid):
+        if not ctypes or not pid:
+            return ""
+        kernel32 = ctypes.windll.kernel32
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        h_proc = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h_proc:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(1024)
+            size = wintypes.DWORD(1024)
+            if kernel32.QueryFullProcessImageNameW(h_proc, 0, buf, ctypes.byref(size)):
+                return buf.value
+        except Exception:
+            pass
+        finally:
+            kernel32.CloseHandle(h_proc)
+        return ""
+
+    def find_target_chrome_hwnd(self, container_hwnd):
+        if not ctypes:
+            return None
+
+        user32 = ctypes.windll.user32
+        my_pid = os.getpid()
+        target_pid = self.chrome_process.pid if self.chrome_process else None
+        candidates = []
+
+        def enum_windows_callback(hwnd, lparam):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+
+            parent = user32.GetParent(hwnd)
+            if parent != 0 and parent != container_hwnd:
+                return True
+
+            class_buff = ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(hwnd, class_buff, 256)
+            cls_name = class_buff.value
+
+            if cls_name != "Chrome_WidgetWin_1":
+                return True
+
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value == my_pid:
+                return True
+
+            exe_path = self._get_process_image_path(pid.value)
+            exe_name = os.path.basename(exe_path).lower()
+
+            # BẮT BUỘC: Chỉ nhận tiến trình chrome.exe thực sự (loại bỏ VS Code, Antigravity IDE, Electron...)
+            if exe_name != "chrome.exe":
+                return True
+
+            rect = wintypes.RECT()
+            user32.GetWindowRect(hwnd, ctypes.byref(rect))
+            w = rect.right - rect.left
+            h = rect.bottom - rect.top
+            if w < 100 or h < 100:
+                return True
+
+            length = user32.GetWindowTextLengthW(hwnd)
+            buff = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buff, length + 1)
+            title = buff.value.lower()
+
+            score = 0
+            if target_pid and pid.value == target_pid:
+                score += 1000
+
+            if parent == container_hwnd:
+                score += 500
+
+            title_keywords = ["dkhp", "đkhp", "uit", "đăng ký", "học phần", "cổng thông tin", "cas", "chrome"]
+            for kw in title_keywords:
+                if kw in title:
+                    score += 100
+
+            unrelated = ["youtube", "facebook", "google search", "gmail", "chatgpt"]
+            for kw in unrelated:
+                if kw in title:
+                    score -= 500
+
+            candidates.append((score, hwnd, title))
+            return True
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+
     def embed_chrome_window(self, container_hwnd, width=800, height=700):
         if not ctypes or not container_hwnd:
             return
@@ -127,50 +249,41 @@ class UITTurboEngine:
         user32 = ctypes.windll.user32
         found_hwnd = None
 
-        for _ in range(20):
-            def enum_windows_callback(hwnd, lparam):
-                nonlocal found_hwnd
-                if user32.IsWindowVisible(hwnd):
-                    length = user32.GetWindowTextLengthW(hwnd)
-                    buff = ctypes.create_unicode_buffer(length + 1)
-                    user32.GetWindowTextW(hwnd, buff, length + 1)
-                    title = buff.value
-                    
-                    class_buff = ctypes.create_unicode_buffer(256)
-                    user32.GetClassNameW(hwnd, class_buff, 256)
-                    cls_name = class_buff.value
-
-                    if cls_name == "Chrome_WidgetWin_1" and ("ĐKHP" in title or "Chrome" in title or "UIT" in title or len(title) == 0):
-                        parent = user32.GetParent(hwnd)
-                        if parent == 0 or parent == container_hwnd:
-                            found_hwnd = hwnd
-                            return False
-                return True
-
-            WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-            user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
-
+        for _ in range(25):
+            found_hwnd = self.find_target_chrome_hwnd(container_hwnd)
             if found_hwnd:
                 break
             time.sleep(0.3)
 
         if found_hwnd:
             self.chrome_hwnd = found_hwnd
+            # Khôi phục nếu đang bị thu nhỏ (minimize)
+            user32.ShowWindow(found_hwnd, 9)  # SW_RESTORE
             user32.SetParent(found_hwnd, container_hwnd)
+            
             style = user32.GetWindowLongW(found_hwnd, GWL_STYLE)
             style &= ~WS_CAPTION
             style &= ~WS_THICKFRAME
             style &= ~WS_BORDER
+            style &= ~0x00020000  # WS_MINIMIZEBOX
+            style &= ~0x00010000  # WS_MAXIMIZEBOX
+            style &= ~0x00080000  # WS_SYSMENU
             style |= WS_CHILD | WS_VISIBLE
             user32.SetWindowLongW(found_hwnd, GWL_STYLE, style)
+            
+            # SWP_FRAMECHANGED (0x0020) | SWP_SHOWWINDOW (0x0040) | SWP_NOZORDER (0x0004)
+            user32.SetWindowPos(found_hwnd, 0, 0, 0, width, height, 0x0020 | 0x0040 | 0x0004)
             user32.MoveWindow(found_hwnd, 0, 0, width, height, True)
+            user32.UpdateWindow(found_hwnd)
             self.log("EMBED", "Đã nhúng Chrome trực tiếp vào giao diện.", "success")
         else:
             self.log("WARN", "Chưa tìm thấy cửa sổ Chrome để nhúng trực tiếp.", "warning")
 
     def resize_embedded_chrome(self, width, height):
         if ctypes and self.chrome_hwnd and width > 0 and height > 0:
-            ctypes.windll.user32.MoveWindow(self.chrome_hwnd, 0, 0, width, height, True)
+            user32 = ctypes.windll.user32
+            user32.MoveWindow(self.chrome_hwnd, 0, 0, width, height, True)
+            user32.UpdateWindow(self.chrome_hwnd)
 
     def get_or_create_target_tab(self):
         try:
@@ -260,8 +373,8 @@ class UITTurboEngine:
     def auto_fill_login(self):
         fill_js = f"""
         (() => {{
-          const user = "{AUTH_USER}";
-          const pass = "{AUTH_PASS}";
+          const user = {json.dumps(self.auth_user)};
+          const pass = {json.dumps(self.auth_pass)};
 
           if (document.querySelector("table tbody tr")) return {{ status: "logged_in" }};
 
@@ -274,7 +387,13 @@ class UITTurboEngine:
           if (userInput && passInput) {{
             const setVal = (el, val) => {{
               el.focus();
-              el.value = val;
+              try {{
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                if (setter) setter.call(el, val);
+                else el.value = val;
+              }} catch(e) {{
+                el.value = val;
+              }}
               el.dispatchEvent(new Event('input', {{ bubbles: true }}));
               el.dispatchEvent(new Event('change', {{ bubbles: true }}));
             }};
@@ -301,7 +420,7 @@ class UITTurboEngine:
                 self.log("AUTH", "Đã ở trong trang ĐKHP.", "success")
             elif status == "filled":
                 has_captcha = res.get("hasCaptcha", False)
-                self.log("AUTH", f"Đã tự điền tài khoản '{AUTH_USER}'.", "success")
+                self.log("AUTH", f"Đã tự điền tài khoản '{self.auth_user}'.", "success")
                 if has_captcha:
                     self.log("CAPTCHA", "Có Captcha! Bạn hãy nhập Captcha trong khung Chrome và Đăng nhập.", "warning")
                 else:
@@ -319,19 +438,35 @@ class UITTurboEngine:
           const rows = document.querySelectorAll("table tbody tr");
           if (rows.length === 0) return {{ status: "error", message: "Chưa thấy bảng học phần trong khung Chrome!" }};
 
+          const setCheckbox = (cb) => {{
+            if (!cb) return false;
+            if (!cb.checked) {{
+              try {{
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')?.set;
+                if (setter) setter.call(cb, true);
+                else cb.checked = true;
+              }} catch(e) {{
+                cb.checked = true;
+              }}
+              cb.dispatchEvent(new Event('input', {{ bubbles: true }}));
+              cb.dispatchEvent(new Event('change', {{ bubbles: true }}));
+              cb.dispatchEvent(new MouseEvent('click', {{ bubbles: true, cancelable: true }}));
+              return true;
+            }}
+            return false;
+          }};
+
           for (let i = 0; i < rows.length; i++) {{
             const row = rows[i];
             const cells = row.querySelectorAll("td");
             if (cells.length < 2) continue;
-            const code = (cells[1].innerText || cells[1].textContent || "").trim().toUpperCase();
+            const code = (cells[1].textContent || "").trim().toUpperCase();
 
             if (targets.has(code)) {{
               found.push(code);
               const cb = row.querySelector("input[type='checkbox']") || cells[0].querySelector("input");
               if (cb) {{
-                if (!cb.checked) {{
-                  cb.click();
-                  cb.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                if (setCheckbox(cb)) {{
                   newlyTicked.push(code);
                 }} else {{
                   alreadyTicked.push(code);
@@ -345,18 +480,50 @@ class UITTurboEngine:
 
           const notFound = Array.from(targets).filter(c => !found.includes(c));
 
-          const btn = 
-            document.querySelector("div.detailBar button.chakra-button.css-kyhdse") ||
-            document.querySelector("div.detailBar button") ||
-            document.querySelector("html body.chakra-ui-light div.css-7t4500 div.css-7t4500 div.css-b95f0i div.css-15u5c5a div.css-1n8vwuv div.css-1luud69 div.chakra-stack.css-1ozbvuw div.css-16b2evc form div.p-2 div.detailBar.fixed.w-full.left-0.bottom-0.bg-gray-100.z-10.border-t.border-solid.border-gray-300.text-center.py-2 div.w-full.justify-center.items-center div.chakra-stack.css-1rafi8n button.chakra-button.css-kyhdse") ||
-            Array.from(document.querySelectorAll("button")).find(b => (b.innerText || "").includes("Đăng ký"));
+          const findBtn = () => {{
+            const direct = document.querySelector("div.detailBar button, div.detailBar button.chakra-button, button.chakra-button.css-kyhdse, button[type='submit']");
+            if (direct) return direct;
+            const allButtons = document.querySelectorAll("button, input[type='submit'], div[role='button']");
+            for (let i = 0; i < allButtons.length; i++) {{
+              const txt = (allButtons[i].textContent || allButtons[i].value || "").trim().toLowerCase();
+              if (txt.includes("đăng ký") || txt.includes("dang ky") || txt.includes("lưu") || txt.includes("xác nhận")) {{
+                return allButtons[i];
+              }}
+            }}
+            return null;
+          }};
 
+          const doClick = (btn) => {{
+            if (!btn) return false;
+            btn.removeAttribute('disabled');
+            btn.disabled = false;
+            ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {{
+              btn.dispatchEvent(new MouseEvent(evt, {{ bubbles: true, cancelable: true, view: window }}));
+            }});
+            if (typeof btn.click === 'function') btn.click();
+            const form = btn.closest('form') || document.querySelector('form');
+            if (form) {{
+              try {{
+                if (typeof form.requestSubmit === 'function') form.requestSubmit(btn);
+                else form.dispatchEvent(new Event('submit', {{ bubbles: true }}));
+              }} catch(e) {{}}
+            }}
+            return true;
+          }};
+
+          let btn = findBtn();
           let clicked = false;
           if (btn) {{
-            btn.scrollIntoView({{ behavior: "instant", block: "center" }});
-            btn.click();
-            clicked = true;
+            clicked = doClick(btn);
           }}
+
+          // Bắn micro-burst nền (5ms, 15ms, 30ms, 60ms, 100ms) để bấm liền ngay khi React cập nhật DOM
+          [5, 15, 30, 60, 100].forEach(delay => {{
+            setTimeout(() => {{
+              const b = findBtn();
+              if (b) doClick(b);
+            }}, delay);
+          }});
 
           const elapsedMs = (performance.now() - t0).toFixed(2);
 
@@ -365,7 +532,7 @@ class UITTurboEngine:
             newlyTicked: newlyTicked,
             alreadyTicked: alreadyTicked,
             notFound: notFound,
-            clickedRegister: clicked,
+            clickedRegister: clicked || !!btn,
             elapsedMs: elapsedMs
           }};
         }})();
@@ -434,11 +601,17 @@ class UITGuiApp(ctk.CTk):
         self.geometry("1420x860")
         self.minsize(1100, 700)
 
+        # Mở GUI ở chế độ phóng to toàn màn hình (Maximized / Max screen)
+        self.maximize_window()
+        self.after(50, self.maximize_window)
+        self.after(200, self.maximize_window)
+
         self.engine = UITTurboEngine(
             log_callback=self.append_log_threadsafe,
             status_callback=self.update_status_threadsafe
         )
 
+        self.is_fullscreen = False
         self.timer_running = False
         self.timer_target_str = ""
 
@@ -449,99 +622,118 @@ class UITGuiApp(ctk.CTk):
 
         self.after(800, self.auto_start_embedded_chrome)
 
+    def maximize_window(self):
+        try:
+            self.state("zoomed")
+        except Exception:
+            try:
+                self.attributes("-zoomed", True)
+            except Exception:
+                pass
+
+    def toggle_fullscreen(self):
+        self.is_fullscreen = not self.is_fullscreen
+        self.attributes("-fullscreen", self.is_fullscreen)
+
     def setup_ui(self):
-        self.grid_columnconfigure(0, weight=6)
-        self.grid_columnconfigure(1, weight=4)
+        self.grid_columnconfigure(0, weight=78)
+        self.grid_columnconfigure(1, weight=22)
         self.grid_rowconfigure(0, weight=1)
 
         self.left_pane = ctk.CTkFrame(self, corner_radius=10, fg_color=("#1e293b", "#0f172a"))
-        self.left_pane.grid(row=0, column=0, padx=(12, 6), pady=12, sticky="nsew")
+        self.left_pane.grid(row=0, column=0, padx=(8, 4), pady=8, sticky="nsew")
         self.left_pane.grid_columnconfigure(0, weight=1)
         self.left_pane.grid_rowconfigure(1, weight=1)
 
         browser_bar = ctk.CTkFrame(self.left_pane, height=44, fg_color=("#334155", "#1e293b"), corner_radius=8)
         browser_bar.grid(row=0, column=0, padx=8, pady=(8, 4), sticky="ew")
-        browser_bar.grid_columnconfigure(3, weight=1)
+        browser_bar.grid_columnconfigure(4, weight=1)
 
         btn_nav_reload = ctk.CTkButton(
-            browser_bar, text="🔄 Tải lại (F5)", width=90, height=28,
+            browser_bar, text="🔄 Tải lại (F5)", width=85, height=28,
             command=self.reload_browser, fg_color="#475569", hover_color="#334155", font=ctk.CTkFont(size=12)
         )
-        btn_nav_reload.grid(row=0, column=0, padx=(8, 4), pady=6)
+        btn_nav_reload.grid(row=0, column=0, padx=(8, 3), pady=6)
 
         btn_nav_home = ctk.CTkButton(
-            browser_bar, text="🏠 Trang ĐKHP", width=100, height=28,
+            browser_bar, text="🏠 Trang ĐKHP", width=95, height=28,
             command=self.navigate_home, fg_color="#475569", hover_color="#334155", font=ctk.CTkFont(size=12)
         )
-        btn_nav_home.grid(row=0, column=1, padx=4, pady=6)
+        btn_nav_home.grid(row=0, column=1, padx=3, pady=6)
 
         btn_reembed = ctk.CTkButton(
-            browser_bar, text="🪟 Căn chỉnh Chrome", width=120, height=28,
+            browser_bar, text="🪟 Căn chỉnh", width=85, height=28,
             command=self.realign_chrome, fg_color="#0284c7", hover_color="#0369a1", font=ctk.CTkFont(size=12)
         )
-        btn_reembed.grid(row=0, column=2, padx=4, pady=6)
+        btn_reembed.grid(row=0, column=2, padx=3, pady=6)
+
+        btn_acc = ctk.CTkButton(
+            browser_bar, text="👤 Tài khoản", width=90, height=28,
+            command=self.switch_to_account_tab, fg_color="#6366f1", hover_color="#4f46e5", font=ctk.CTkFont(size=12)
+        )
+        btn_acc.grid(row=0, column=3, padx=3, pady=6)
 
         lbl_url = ctk.CTkLabel(browser_bar, text=TARGET_URL, text_color="#94a3b8", font=ctk.CTkFont(size=11))
-        lbl_url.grid(row=0, column=3, padx=10, sticky="e")
+        lbl_url.grid(row=0, column=4, padx=10, sticky="e")
 
         self.chrome_container = tk.Frame(self.left_pane, bg="#000000")
         self.chrome_container.grid(row=1, column=0, padx=8, pady=(4, 8), sticky="nsew")
         self.chrome_container.bind("<Configure>", self.on_chrome_container_resize)
 
         self.right_pane = ctk.CTkFrame(self, corner_radius=10, fg_color=("#1f2937", "#111827"))
-        self.right_pane.grid(row=0, column=1, padx=(6, 12), pady=12, sticky="nsew")
+        self.right_pane.grid(row=0, column=1, padx=(4, 8), pady=8, sticky="nsew")
         self.right_pane.grid_columnconfigure(0, weight=1)
         self.right_pane.grid_rowconfigure(2, weight=1)
 
         self.header_frame = ctk.CTkFrame(self.right_pane, corner_radius=8, fg_color=("#374151", "#1f2937"))
-        self.header_frame.grid(row=0, column=0, padx=10, pady=(10, 4), sticky="ew")
+        self.header_frame.grid(row=0, column=0, padx=8, pady=(8, 4), sticky="ew")
         self.header_frame.grid_columnconfigure(0, weight=1)
 
         title_label = ctk.CTkLabel(
             self.header_frame, 
             text="⚡ ĐIỀU KHIỂN TURBO", 
-            font=ctk.CTkFont(size=18, weight="bold"),
+            font=ctk.CTkFont(size=16, weight="bold"),
             text_color="#38bdf8"
         )
-        title_label.grid(row=0, column=0, padx=10, pady=(8, 2), sticky="w")
+        title_label.grid(row=0, column=0, padx=8, pady=(6, 2), sticky="w")
 
         self.status_badge = ctk.CTkLabel(
             self.header_frame,
-            text="Chrome: Đang khởi động...",
+            text="Chrome: Đang kết nối...",
             font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#374151",
             text_color="#facc15",
             corner_radius=6,
-            padx=8,
-            pady=3
+            padx=6,
+            pady=2
         )
-        self.status_badge.grid(row=0, column=1, padx=10, pady=8, sticky="e")
+        self.status_badge.grid(row=0, column=1, padx=8, pady=6, sticky="e")
 
         self.buttons_frame = ctk.CTkFrame(self.right_pane, corner_radius=8)
-        self.buttons_frame.grid(row=1, column=0, padx=10, pady=4, sticky="ew")
-        self.buttons_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        self.buttons_frame.grid(row=1, column=0, padx=8, pady=4, sticky="ew")
+        self.buttons_frame.grid_columnconfigure((0, 1), weight=1)
 
         self.btn_fire_now = ctk.CTkButton(
             self.buttons_frame,
-            text="🚀 ĐĂNG KÝ TỨC THÌ (SPACE / ENTER)",
+            text="🚀 ĐĂNG KÝ TỨC THÌ (SPACE/ENTER)",
             command=self.trigger_fire_now,
-            font=ctk.CTkFont(size=16, weight="bold"),
+            font=ctk.CTkFont(size=14, weight="bold"),
             fg_color="#16a34a",
             hover_color="#15803d",
-            height=48
+            height=46
         )
-        self.btn_fire_now.grid(row=0, column=0, columnspan=4, padx=10, pady=(8, 4), sticky="ew")
+        self.btn_fire_now.grid(row=0, column=0, columnspan=2, padx=8, pady=(8, 4), sticky="ew")
 
         self.btn_f5_loop = ctk.CTkButton(
             self.buttons_frame,
-            text="🔄 F5 & BẮN LIÊN TỤC (Loop 50ms)",
+            text="🔄 F5 & BẮN LIÊN TỤC (50ms)",
             command=self.trigger_f5_loop,
-            font=ctk.CTkFont(size=13, weight="bold"),
+            font=ctk.CTkFont(size=12, weight="bold"),
             fg_color="#d97706",
             hover_color="#b45309",
-            height=36
+            height=34
         )
-        self.btn_f5_loop.grid(row=1, column=0, columnspan=4, padx=10, pady=4, sticky="ew")
+        self.btn_f5_loop.grid(row=1, column=0, columnspan=2, padx=8, pady=4, sticky="ew")
 
         btn_import_excel = ctk.CTkButton(
             self.buttons_frame, 
@@ -549,10 +741,10 @@ class UITGuiApp(ctk.CTk):
             command=self.import_file,
             fg_color="#0284c7",
             hover_color="#0369a1",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=30
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28
         )
-        btn_import_excel.grid(row=2, column=0, padx=(10, 2), pady=4, sticky="ew")
+        btn_import_excel.grid(row=2, column=0, padx=(8, 3), pady=3, sticky="ew")
 
         btn_save = ctk.CTkButton(
             self.buttons_frame, 
@@ -560,10 +752,10 @@ class UITGuiApp(ctk.CTk):
             command=self.save_subjects_to_file,
             fg_color="#059669",
             hover_color="#047857",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=30
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28
         )
-        btn_save.grid(row=2, column=1, padx=2, pady=4, sticky="ew")
+        btn_save.grid(row=2, column=1, padx=(3, 8), pady=3, sticky="ew")
 
         btn_sample = ctk.CTkButton(
             self.buttons_frame, 
@@ -571,10 +763,10 @@ class UITGuiApp(ctk.CTk):
             command=self.load_sample_subjects,
             fg_color="#4b5563",
             hover_color="#374151",
-            font=ctk.CTkFont(size=12),
-            height=30
+            font=ctk.CTkFont(size=11),
+            height=28
         )
-        btn_sample.grid(row=2, column=2, padx=2, pady=4, sticky="ew")
+        btn_sample.grid(row=3, column=0, padx=(8, 3), pady=3, sticky="ew")
 
         btn_clear = ctk.CTkButton(
             self.buttons_frame, 
@@ -582,46 +774,47 @@ class UITGuiApp(ctk.CTk):
             command=lambda: self.txt_subjects.delete("1.0", tk.END),
             fg_color="#dc2626",
             hover_color="#b91c1c",
-            font=ctk.CTkFont(size=12),
-            height=30
+            font=ctk.CTkFont(size=11),
+            height=28
         )
-        btn_clear.grid(row=2, column=3, padx=(2, 10), pady=4, sticky="ew")
+        btn_clear.grid(row=3, column=1, padx=(3, 8), pady=3, sticky="ew")
 
         timer_subframe = ctk.CTkFrame(self.buttons_frame, fg_color="transparent")
-        timer_subframe.grid(row=3, column=0, columnspan=4, padx=10, pady=(4, 8), sticky="ew")
+        timer_subframe.grid(row=4, column=0, columnspan=2, padx=8, pady=(4, 8), sticky="ew")
         timer_subframe.grid_columnconfigure(1, weight=1)
 
-        lbl_timer = ctk.CTkLabel(timer_subframe, text="⏱️ Hẹn giờ:", font=ctk.CTkFont(size=12, weight="bold"))
-        lbl_timer.grid(row=0, column=0, padx=(0, 4), sticky="w")
+        lbl_timer = ctk.CTkLabel(timer_subframe, text="⏱️", font=ctk.CTkFont(size=13, weight="bold"))
+        lbl_timer.grid(row=0, column=0, padx=(0, 2), sticky="w")
 
         self.entry_timer = ctk.CTkEntry(timer_subframe, placeholder_text="09:00:00.000", font=ctk.CTkFont(family="Consolas", size=12), height=28)
-        self.entry_timer.grid(row=0, column=1, padx=4, sticky="ew")
+        self.entry_timer.grid(row=0, column=1, padx=2, sticky="ew")
 
         self.btn_timer = ctk.CTkButton(
             timer_subframe,
-            text="Đặt giờ",
+            text="Hẹn",
             command=self.toggle_timer,
-            width=70,
+            width=50,
             height=28,
             fg_color="#8b5cf6",
             hover_color="#7c3aed",
-            font=ctk.CTkFont(size=12)
+            font=ctk.CTkFont(size=11, weight="bold")
         )
-        self.btn_timer.grid(row=0, column=2, padx=4, sticky="e")
+        self.btn_timer.grid(row=0, column=2, padx=2, sticky="e")
 
         self.lbl_clock = ctk.CTkLabel(
             timer_subframe,
             text="00:00:00.000",
-            font=ctk.CTkFont(family="Consolas", size=12, weight="bold"),
+            font=ctk.CTkFont(family="Consolas", size=11, weight="bold"),
             text_color="#38bdf8"
         )
-        self.lbl_clock.grid(row=0, column=3, padx=(6, 0), sticky="e")
+        self.lbl_clock.grid(row=0, column=3, padx=(4, 0), sticky="e")
 
         self.tabview_bottom = ctk.CTkTabview(self.right_pane, corner_radius=8)
-        self.tabview_bottom.grid(row=2, column=0, padx=10, pady=(4, 10), sticky="nsew")
+        self.tabview_bottom.grid(row=2, column=0, padx=8, pady=(4, 8), sticky="nsew")
 
-        self.tab_subjects = self.tabview_bottom.add("📝 HỘP DÁN MÃ MÔN")
+        self.tab_subjects = self.tabview_bottom.add("📝 DÁN MÃ MÔN")
         self.tab_log = self.tabview_bottom.add("📜 LIVE LOG")
+        self.tab_account = self.tabview_bottom.add("👤 TÀI KHOẢN")
 
         self.tab_subjects.grid_columnconfigure(0, weight=1)
         self.tab_subjects.grid_rowconfigure(0, weight=1)
@@ -661,10 +854,124 @@ class UITGuiApp(ctk.CTk):
         )
         self.txt_log.grid(row=1, column=0, padx=4, pady=(2, 4), sticky="nsew")
 
+        # Setup Tab Tài khoản
+        self.tab_account.grid_columnconfigure(0, weight=1)
+        self.tab_account.grid_rowconfigure(0, weight=1)
+
+        acc_box = ctk.CTkFrame(self.tab_account, fg_color="#0f172a", corner_radius=8)
+        acc_box.grid(row=0, column=0, padx=4, pady=4, sticky="nsew")
+        acc_box.grid_columnconfigure(1, weight=1)
+
+        lbl_acc_title = ctk.CTkLabel(
+            acc_box, 
+            text="🔐 CẤU HÌNH TÀI KHOẢN ĐKHP", 
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#38bdf8"
+        )
+        lbl_acc_title.grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 6), sticky="w")
+
+        lbl_u = ctk.CTkLabel(acc_box, text="MSSV / User:", font=ctk.CTkFont(size=12))
+        lbl_u.grid(row=1, column=0, padx=10, pady=4, sticky="w")
+        self.entry_auth_user = ctk.CTkEntry(acc_box, font=ctk.CTkFont(size=12), height=28)
+        self.entry_auth_user.grid(row=1, column=1, padx=(4, 10), pady=4, sticky="ew")
+        self.entry_auth_user.insert(0, self.engine.auth_user)
+
+        lbl_p = ctk.CTkLabel(acc_box, text="Mật khẩu:", font=ctk.CTkFont(size=12))
+        lbl_p.grid(row=2, column=0, padx=10, pady=4, sticky="w")
+
+        pass_frame = ctk.CTkFrame(acc_box, fg_color="transparent")
+        pass_frame.grid(row=2, column=1, padx=(4, 10), pady=4, sticky="ew")
+        pass_frame.grid_columnconfigure(0, weight=1)
+
+        self.entry_auth_pass = ctk.CTkEntry(pass_frame, show="*", font=ctk.CTkFont(size=12), height=28)
+        self.entry_auth_pass.grid(row=0, column=0, padx=(0, 4), sticky="ew")
+        self.entry_auth_pass.insert(0, self.engine.auth_pass)
+
+        self.btn_show_pass = ctk.CTkButton(
+            pass_frame, 
+            text="👁️", 
+            width=30, 
+            height=28,
+            command=self.toggle_password_visibility,
+            fg_color="#334155",
+            hover_color="#475569"
+        )
+        self.btn_show_pass.grid(row=0, column=1, sticky="e")
+
+        btn_box = ctk.CTkFrame(acc_box, fg_color="transparent")
+        btn_box.grid(row=3, column=0, columnspan=2, padx=10, pady=(10, 4), sticky="ew")
+        btn_box.grid_columnconfigure((0, 1), weight=1)
+
+        btn_save_acc = ctk.CTkButton(
+            btn_box,
+            text="💾 Lưu tài khoản",
+            command=self.save_account_settings,
+            fg_color="#059669",
+            hover_color="#047857",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=30
+        )
+        btn_save_acc.grid(row=0, column=0, padx=(0, 3), sticky="ew")
+
+        btn_fill_now = ctk.CTkButton(
+            btn_box,
+            text="⚡ Tự điền vào Chrome",
+            command=self.auto_fill_login_now,
+            fg_color="#6366f1",
+            hover_color="#4f46e5",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=30
+        )
+        btn_fill_now.grid(row=0, column=1, padx=(3, 0), sticky="ew")
+
+        lbl_note = ctk.CTkLabel(
+            acc_box,
+            text="ℹ️ Lưu vào config.json và tự điền khi mở ĐKHP.",
+            font=ctk.CTkFont(size=10),
+            text_color="#94a3b8",
+            justify="left"
+        )
+        lbl_note.grid(row=4, column=0, columnspan=2, padx=10, pady=(6, 8), sticky="w")
+
+    def switch_to_account_tab(self):
+        self.tabview_bottom.set("👤 TÀI KHOẢN")
+
+    def toggle_password_visibility(self):
+        if self.entry_auth_pass.cget("show") == "*":
+            self.entry_auth_pass.configure(show="")
+            self.btn_show_pass.configure(text="🔒")
+        else:
+            self.entry_auth_pass.configure(show="*")
+            self.btn_show_pass.configure(text="👁️")
+
+    def save_account_settings(self):
+        u = self.entry_auth_user.get().strip()
+        p = self.entry_auth_pass.get().strip()
+        if not u or not p:
+            messagebox.showwarning("Cảnh báo", "Vui lòng nhập đầy đủ tài khoản và mật khẩu!")
+            return
+        if self.engine.save_config(u, p):
+            self.append_log_threadsafe(f"Đã lưu tài khoản: {u}", "success")
+            messagebox.showinfo("Thành công", f"Đã lưu tài khoản '{u}' vào config.json!")
+            threading.Thread(target=self.engine.auto_fill_login, daemon=True).start()
+        else:
+            messagebox.showerror("Lỗi", "Không thể lưu vào file config.json!")
+
+    def auto_fill_login_now(self):
+        u = self.entry_auth_user.get().strip()
+        p = self.entry_auth_pass.get().strip()
+        if u and p:
+            self.engine.auth_user = u
+            self.engine.auth_pass = p
+            self.engine.save_config(u, p)
+        self.append_log_threadsafe("Đang tự điền tài khoản vào Chrome...", "info")
+        threading.Thread(target=self.engine.auto_fill_login, daemon=True).start()
+
     def bind_shortcuts(self):
         self.bind("<Return>", lambda e: self.trigger_fire_now() if e.widget != self.txt_subjects else None)
         self.bind("<space>", lambda e: self.trigger_fire_now() if e.widget != self.txt_subjects and e.widget != self.entry_timer else None)
         self.bind("<F5>", lambda e: self.trigger_f5_loop())
+        self.bind("<F11>", lambda e: self.toggle_fullscreen())
 
     def on_chrome_container_resize(self, event):
         if event.width > 50 and event.height > 50:
@@ -680,8 +987,8 @@ class UITGuiApp(ctk.CTk):
 
     def realign_chrome(self):
         hwnd = self.chrome_container.winfo_id()
-        w = self.chrome_container.winfo_width()
-        h = self.chrome_container.winfo_height()
+        w = self.chrome_container.winfo_width() or 800
+        h = self.chrome_container.winfo_height() or 700
         def _run():
             self.engine.embed_chrome_window(hwnd, w, h)
         threading.Thread(target=_run, daemon=True).start()
