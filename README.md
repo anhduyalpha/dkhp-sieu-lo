@@ -1,13 +1,7 @@
-# UIT ĐKHP - TURBO ENGINE ⚡
+# UIT ĐKHP
 
-Công cụ hỗ trợ đăng ký học phần UIT siêu tốc độ (độ trễ < 2ms) qua Chrome DevTools Protocol (CDP) WebSocket.
+Công cụ hỗ trợ đăng ký học phần UIT siêu lỏ qua Chrome DevTools Protocol (CDP) WebSocket.
 
-## 🌟 Tính năng nổi bật
-
-- **Tự động mở Chrome**: Tự tìm đường dẫn Chrome và khởi chạy ở chế độ Debugging Port.
-- **Tự động điền tài khoản & mật khẩu**: Điền sẵn thông tin đăng nhập, hỗ trợ giải Captcha thủ công trên màn hình trình duyệt.
-- **Persistent WebSocket (0ms delay)**: Giữ kết nối socket liên tục với tab ĐKHP để khi bấm nút có thể bắn lệnh tức thì mà không cần kết nối lại.
-- **Thuật toán O(1) Turbo**: Tra cứu mã môn học bằng `Set`, tick toàn bộ lớp học phần và kích hoạt nút Đăng ký trong vòng chưa tới 1ms.
 - **Bảng điều khiển tương tác nhanh**:
   - `[ENTER]`: Bắn lệnh tick và Đăng ký tức thì.
   - `f` + `[ENTER]`: F5 tải lại trang và tự động bắn liên tục (mỗi 50ms).
@@ -20,6 +14,7 @@ Công cụ hỗ trợ đăng ký học phần UIT siêu tốc độ (độ trễ
 ## 🛠️ Yêu cầu & Cài đặt
 
 ### 1. Yêu cầu
+
 - Python 3.8+
 - Google Chrome
 
@@ -40,9 +35,10 @@ pip install -r requirements.txt
 
 ---
 
-## 🚀 Hướng dẫn sử dụng
+## Hướng dũng sử dệnh
 
-### Bước 1: Cấu hình mã môn học
+### Bước 1: Tự lực cánh sinh nhập tay =)))))
+
 Mở file `mon-hoc.txt` và nhập danh sách mã lớp học phần cần đăng ký (mỗi mã 1 dòng), ví dụ:
 
 ```text
@@ -58,7 +54,7 @@ IT004.R117
 IT004.R117.1
 ```
 
-### Bước 2: Chạy công cụ
+### Bước 2: Chạy tool ( biết python và env là được )
 
 ```powershell
 .\.venv\Scripts\python.exe inject-hoc-phan.py
@@ -67,7 +63,7 @@ IT004.R117.1
 ### Bước 3: Đăng nhập & Sẵn sàng
 
 1. Tool sẽ tự mở Chrome và truy cập vào trang `https://dkhp.uit.edu.vn/app/reg`.
-2. Tài khoản & Mật khẩu đã được điền sẵn. Nếu xuất hiện **Captcha**, bạn chỉ cần nhập Captcha trên màn hình Chrome và bấm Đăng nhập.
+2. Tài khoản & Mật khẩu đã được điền sẵn. Nếu xuất hiện **Captcha**, bạn chỉ cần nhập Captcha trên màn hình Chrome và bấm Đăng nhập. ( còn không mua thì money talk có tool bypass capcha mà tỉ lệ ra capcha khá thấp nếu auto liên tục mới ra ).
 3. Khi đã vào trang ĐKHP, tool sẽ ở trạng thái chờ lệnh sẵn sàng.
 4. **Đến đúng giây mở cổng ĐKHP**: Nhấn phím **`ENTER]`** trên terminal để hệ thống tự động tick chọn tất cả các môn và bấm Đăng ký.
 
