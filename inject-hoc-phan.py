@@ -307,7 +307,7 @@ class UITTurboBot:
 
     def build_turbo_payload(self):
         return f"""
-        (() => {{
+        (async () => {{
           const t0 = performance.now();
           const targets = new Set({json.dumps(self.target_classes)}.map(c => c.trim().toUpperCase()));
           const found = [];
@@ -373,7 +373,8 @@ class UITTurboBot:
               "div[class*='detailBar'] button",
               "button.chakra-button.css-kyhdse",
               "button[type='submit']",
-              "form button[type='submit']"
+              "form button[type='submit']",
+              "button.chakra-button"
             ];
             for (const s of direct) {{
               const el = document.querySelector(s);
@@ -383,7 +384,7 @@ class UITTurboBot:
             const allButtons = Array.from(document.querySelectorAll("button, input[type='submit'], div[role='button'], a[role='button']"));
             for (const b of allButtons) {{
               const txt = (b.innerText || b.textContent || b.value || "").trim().toLowerCase();
-              if (txt.includes("đăng ký") || txt.includes("dang ky") || txt.includes("lưu") || txt.includes("xác nhận")) {{
+              if (txt.includes("đăng ký") || txt.includes("dang ky") || txt.includes("lưu") || txt.includes("xác nhận") || txt.includes("submit")) {{
                 return b;
               }}
             }}
@@ -394,6 +395,8 @@ class UITTurboBot:
             if (!btn) return false;
             btn.removeAttribute('disabled');
             btn.disabled = false;
+            btn.removeAttribute('aria-disabled');
+            btn.style.pointerEvents = 'auto';
             try {{
               btn.scrollIntoView({{ behavior: "instant", block: "center" }});
             }} catch(e) {{}}
@@ -401,7 +404,9 @@ class UITTurboBot:
             ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {{
               btn.dispatchEvent(new MouseEvent(evt, {{ bubbles: true, cancelable: true, view: window }}));
             }});
-            if (typeof btn.click === 'function') btn.click();
+            if (typeof btn.click === 'function') {{
+              try {{ btn.click(); }} catch(e) {{}}
+            }}
             const form = btn.closest('form') || document.querySelector('form');
             if (form) {{
               try {{
@@ -416,9 +421,55 @@ class UITTurboBot:
           let clicked = false;
           if (btn) {{
             clicked = doClick(btn);
+          }} else {{
+            // Chờ MutationObserver kích hoạt ngay khi React cập nhật DOM (0-30ms)
+            clicked = await new Promise((resolve) => {{
+              let done = false;
+              const obs = new MutationObserver(() => {{
+                const b = findBtn();
+                if (b && !done) {{
+                  done = true;
+                  obs.disconnect();
+                  doClick(b);
+                  resolve(true);
+                }}
+              }});
+              try {{
+                obs.observe(document.body, {{ childList: true, subtree: true, attributes: true }});
+              }} catch(e) {{}}
+
+              // Polling mỗi 4ms làm lưới an toàn
+              const poll = setInterval(() => {{
+                const b = findBtn();
+                if (b && !done) {{
+                  done = true;
+                  clearInterval(poll);
+                  obs.disconnect();
+                  doClick(b);
+                  resolve(true);
+                }}
+              }}, 4);
+
+              // Timeout tối đa 150ms
+              setTimeout(() => {{
+                if (!done) {{
+                  done = true;
+                  clearInterval(poll);
+                  obs.disconnect();
+                  const b = findBtn();
+                  if (b) {{
+                    doClick(b);
+                    resolve(true);
+                  }} else {{
+                    resolve(false);
+                  }}
+                }}
+              }}, 150);
+            }});
           }}
 
-          [10, 30, 60, 100, 200].forEach(delay => {{
+          // Micro-burst background trigger thêm
+          [20, 50, 100].forEach(delay => {{
             setTimeout(() => {{
               const b = findBtn();
               if (b) doClick(b);
@@ -432,10 +483,10 @@ class UITTurboBot:
             newlyTicked: newlyTicked,
             alreadyTicked: alreadyTicked,
             notFound: notFound,
-            clickedRegister: clicked || !!btn,
+            clickedRegister: clicked,
             elapsedMs: elapsedMs
           }};
-        }})();
+        }})()
         """
 
     def fire(self):
@@ -453,52 +504,6 @@ class UITTurboBot:
         not_found = result.get("notFound", [])
         clicked = result.get("clickedRegister", False)
         js_time = result.get("elapsedMs", "0")
-
-        # Thử lại nếu React render nút chậm sau khi tick
-        if not clicked and (newly or already):
-            for _ in range(6):
-                time.sleep(0.04)
-                res_btn = self.eval_js("""
-                (() => {
-                  const direct = [
-                    "div.detailBar button.chakra-button.css-kyhdse",
-                    "div.detailBar button.chakra-button",
-                    "div.detailBar button",
-                    "div[class*='detailBar'] button",
-                    "button.chakra-button.css-kyhdse",
-                    "button[type='submit']"
-                  ];
-                  for (const s of direct) {
-                    const el = document.querySelector(s);
-                    if (el) {
-                      el.removeAttribute('disabled');
-                      el.disabled = false;
-                      ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
-                        el.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
-                      });
-                      if (typeof el.click === 'function') el.click();
-                      return true;
-                    }
-                  }
-                  const allButtons = Array.from(document.querySelectorAll("button, input[type='submit'], div[role='button']"));
-                  for (const b of allButtons) {
-                    const txt = (b.innerText || b.textContent || b.value || "").trim().toLowerCase();
-                    if (txt.includes("đăng ký") || txt.includes("dang ky") || txt.includes("lưu") || txt.includes("xác nhận")) {
-                      b.removeAttribute('disabled');
-                      b.disabled = false;
-                      ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(evt => {
-                        b.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, view: window }));
-                      });
-                      if (typeof b.click === 'function') b.click();
-                      return true;
-                    }
-                  }
-                  return false;
-                })();
-                """)
-                if res_btn:
-                    clicked = True
-                    break
 
         self.log("FIRE", f"Đã thực thi trong {js_time}ms (Tổng: {total_time_ms}ms)", Fore.GREEN)
 
