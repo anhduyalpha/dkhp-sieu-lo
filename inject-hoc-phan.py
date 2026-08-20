@@ -15,8 +15,8 @@ TARGET_URL = "https://dkhp.uit.edu.vn/app/reg"
 DEFAULT_FILES = ["mon_hoc.txt", "mon-hoc.txt"]
 CHROME_DEBUG_PORT = 9222
 CONFIG_FILE = "config.json"
-DEFAULT_AUTH_USER = "25520412"
-DEFAULT_AUTH_PASS = "QawJcz975zuBs$8"
+DEFAULT_AUTH_USER = ""
+DEFAULT_AUTH_PASS = ""
 
 class UITTurboBot:
     def __init__(self):
@@ -195,14 +195,14 @@ class UITTurboBot:
                 if classes:
                     self.target_classes = classes
                     return self.target_classes
-        self.target_classes = [
-            "IT012.R11", "IT012.R11.1", "SS007.R15", "SS003.R14",
-            "IT005.R18", "IT005.R18.2", "IT007.R111.1", "IT007.R111",
-            "IT004.R117", "IT004.R117.1"
-        ]
+        self.target_classes = []
         return self.target_classes
 
     def auto_fill_login(self):
+        if not self.auth_user or not self.auth_pass:
+            self.log("AUTH", "Chưa cấu hình tài khoản/mật khẩu trong config.json.", Fore.YELLOW)
+            return
+
         fill_js = f"""
         (() => {{
           const user = {json.dumps(self.auth_user)};

@@ -1,9 +1,7 @@
 (() => {
   const t0 = performance.now();
   const TARGETS = new Set([
-    "IT012.R11", "IT012.R11.1", "SS007.R15", "SS003.R14",
-    "IT005.R18", "IT005.R18.2", "IT007.R111.1", "IT007.R111",
-    "IT004.R117", "IT004.R117.1"
+    // Nhập các mã môn cần đăng ký vào đây, ví dụ: "IT001.N11", "IT002.N12"
   ].map(c => c.trim().toUpperCase()));
 
   const rows = document.querySelectorAll("table tbody tr");

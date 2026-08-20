@@ -28,8 +28,8 @@ DEFAULT_FILES = ["mon_hoc.txt", "mon-hoc.txt"]
 CHROME_DEBUG_PORT = 9222
 USER_DATA_DIR = r"C:\chrome_debug"
 CONFIG_FILE = "config.json"
-DEFAULT_AUTH_USER = "25520412"
-DEFAULT_AUTH_PASS = "QawJcz975zuBs$8"
+DEFAULT_AUTH_USER = ""
+DEFAULT_AUTH_PASS = ""
 
 GWL_STYLE = -16
 WS_CHILD = 0x40000000
@@ -381,6 +381,10 @@ class UITTurboEngine:
         self.send_cdp("Page.navigate", {"url": TARGET_URL})
 
     def auto_fill_login(self):
+        if not self.auth_user or not self.auth_pass:
+            self.log("AUTH", "Chưa cấu hình tài khoản/mật khẩu. Bạn có thể vào tab '👤 TÀI KHOẢN' để lưu.", "info")
+            return
+
         fill_js = f"""
         (() => {{
           const user = {json.dumps(self.auth_user)};
@@ -747,7 +751,7 @@ class UITGuiApp(ctk.CTk):
 
         btn_import_excel = ctk.CTkButton(
             self.buttons_frame, 
-            text="📁 Import Excel", 
+            text="📁 Import Excel / TXT", 
             command=self.import_file,
             fg_color="#0284c7",
             hover_color="#0369a1",
@@ -758,7 +762,7 @@ class UITGuiApp(ctk.CTk):
 
         btn_save = ctk.CTkButton(
             self.buttons_frame, 
-            text="💾 Lưu môn", 
+            text="💾 Lưu danh sách môn", 
             command=self.save_subjects_to_file,
             fg_color="#059669",
             hover_color="#047857",
@@ -767,27 +771,16 @@ class UITGuiApp(ctk.CTk):
         )
         btn_save.grid(row=2, column=1, padx=(3, 8), pady=3, sticky="ew")
 
-        btn_sample = ctk.CTkButton(
-            self.buttons_frame, 
-            text="🔄 Nạp mẫu", 
-            command=self.load_sample_subjects,
-            fg_color="#4b5563",
-            hover_color="#374151",
-            font=ctk.CTkFont(size=11),
-            height=28
-        )
-        btn_sample.grid(row=3, column=0, padx=(8, 3), pady=3, sticky="ew")
-
         btn_clear = ctk.CTkButton(
             self.buttons_frame, 
-            text="🗑️ Xóa trắng", 
+            text="🗑️ Xóa trắng danh sách môn", 
             command=lambda: self.txt_subjects.delete("1.0", tk.END),
-            fg_color="#dc2626",
-            hover_color="#b91c1c",
+            fg_color="#475569",
+            hover_color="#334155",
             font=ctk.CTkFont(size=11),
-            height=28
+            height=26
         )
-        btn_clear.grid(row=3, column=1, padx=(3, 8), pady=3, sticky="ew")
+        btn_clear.grid(row=3, column=0, columnspan=2, padx=8, pady=3, sticky="ew")
 
         timer_subframe = ctk.CTkFrame(self.buttons_frame, fg_color="transparent")
         timer_subframe.grid(row=4, column=0, columnspan=2, padx=8, pady=(4, 8), sticky="ew")
@@ -1058,18 +1051,8 @@ class UITGuiApp(ctk.CTk):
                     self.engine.target_classes = subs
                     self.append_log_threadsafe(f"Đã nạp {len(subs)} môn từ {fn}", "info")
                     return
-        self.load_sample_subjects()
-
-    def load_sample_subjects(self):
-        samples = [
-            "IT012.R11", "IT012.R11.1", "SS007.R15", "SS003.R14",
-            "IT005.R18", "IT005.R18.2", "IT007.R111.1", "IT007.R111",
-            "IT004.R117", "IT004.R117.1"
-        ]
         self.txt_subjects.delete("1.0", tk.END)
-        self.txt_subjects.insert(tk.END, "\n".join(samples))
-        self.engine.target_classes = samples
-        self.append_log_threadsafe(f"Đã nạp {len(samples)} môn mẫu.", "info")
+        self.engine.target_classes = []
 
     def save_subjects_to_file(self):
         subs = self.get_current_subjects()
