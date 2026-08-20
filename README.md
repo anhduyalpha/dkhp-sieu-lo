@@ -13,7 +13,7 @@ Công cụ hỗ trợ đăng ký học phần UIT siêu lỏ qua Chrome DevTools
 
 ## 🎥 Video hướng dẫn
 
-https://github.com/anhduyalpha/dkhp-sieu-lo/raw/main/a.mp4
+![Video Hướng Dẫn](./demo.gif)
 
 ---
 
